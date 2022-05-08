@@ -1,26 +1,3 @@
-import Mogrify
-
-# This does operations on an original image:
-# Mogrify.open "input.jpg"
-# |> Mogrify.resize("100x100") |> Mogrify.save
-
-# # save/1 creates a copy of the file by default:
-# image = open("input.jpg") |> resize("100x100") |> save
-# # => %Image{path: "/tmp/260199-input.jpg", ext: ".jpg", ...}
-# IO.inspect(image)
-
-# # Resize to fill
-# open("input.jpg") |> resize_to_fill("450x300") |> save
-
-# # Resize to limit
-# open("input.jpg") |> resize_to_limit("200x200") |> save
-
-# # Extent
-# open("input.jpg") |> extent("500x500") |> save
-
-# # Gravity
-# open("input.jpg") |> gravity("Center") |> save
-
 defmodule Identicon do
   def main(input \\ "asdf") do
     input
@@ -28,61 +5,61 @@ defmodule Identicon do
     |> pick_color()
     |> build_grid()
     |> filter_odd()
+    |> build_pixel_map()
+    |> grid_to_image()
   end
 
   def hash_input(input) do
     hex = :crypto.hash(:md5, input) |> :binary.bin_to_list()
-    %Identicon.Image{hex: hex}
+    %Identicon.Image{hex: hex, seed: input}
   end
 
-  def pick_color(image) do
-    [r, g, b | _tail] = image.hex
-    %Identicon.Image{image | color: {r, g, b}}
+  def pick_color(identicon) do
+    [r, g, b | _tail] = identicon.hex
+    %Identicon.Image{identicon | color: {r, g, b}}
   end
 
   def mirror_row(row) do
     row ++ tl(Enum.reverse(row))
   end
 
-  def build_grid(image) do
+  def build_grid(identicon) do
     grid =
-      image.hex
+      identicon.hex
       |> Enum.chunk_every(3, 3, :discard)
       |> Enum.map(&mirror_row/1)
       |> List.flatten()
       |> Enum.with_index()
 
-    %Identicon.Image{image | grid: grid}
+    %Identicon.Image{identicon | grid: grid}
   end
 
-  def filter_odd(%Identicon.Image{grid: grid} = image) do
-    filtered = Enum.filter(grid, fn {value, _index} -> rem(value, 2) == 0 end)
-    %Identicon.Image{image | grid: filtered}
+  def filter_odd(identicon) do
+    grid = Enum.filter(identicon.grid, fn {code, _index} -> rem(code, 2) == 0 end)
+    %Identicon.Image{identicon | grid: grid}
   end
 
-  def grid_to_image(image) do
-    # :egd.save(img, "image.png")
-    # :egd.rectangle(img, 0, 250, :egd(green))
+  def build_pixel_map(identicon) do
+    pixel_map =
+      Enum.map(identicon.grid, fn {_value, index} ->
+        {{rem(index, 5) * 50, div(index, 5) * 50},
+         {(rem(index, 5) + 1) * 50, (div(index, 5) + 1) * 50}}
+      end)
+
+    %Identicon.Image{identicon | pixel_map: pixel_map}
   end
 
-  # def save_image(image) do
-  #   image
-  # end
+  def grid_to_image(identicon) do
+    image = :egd.create(250, 250)
+    fill = :egd.color(identicon.color)
+
+    Enum.each(identicon.pixel_map, fn {p1, p2} ->
+      :egd.filledRectangle(image, p1, p2, fill)
+    end)
+
+    :egd.save(:egd.render(image), "#{identicon.seed}.jpg")
+    identicon
+  end
 end
 
-# defprotocol Identy do
-#   @doc "Calculates the size (and not the length!) of a data structure"
-#   def size(data)
-# end
-
-identy = Identicon.main()
-
 # identy = Identicon.main()
-
-# def identy do
-#   identy = Identicon.main()
-# end
-
-# [145, 46, 200, 3, 178, 206, 73, 228, 165, 65, 6, 141, 73, 90, 181, 112]
-# 912EC8
-# https://excalidraw.com/#json=eagDj8eWJx4hhl5FMQ_D4,9R0DtBOCVU7ZUCpHFhOyOQ
